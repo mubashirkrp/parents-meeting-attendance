@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parents Meeting Attendance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: sticky header with two tabs; attendance is a ruled register, summary is a grid of pie cards led by the school-wide total. */
+:root{
+  --bg:#f6f4ee; --card:#ffffff; --ink:#1d2a26; --muted:#66726d; --line:#d9d6cb;
+  --accent:#0f5c4d; --ontime:#1f8a4c; --late:#e0952b; --absent:#c8473d;
+  --display:"Fraunces",Georgia,serif; --body:"Source Sans 3",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14201c; --card:#1c2b26; --ink:#eef2ee; --muted:#9db0a8; --line:#33453e;
+  --accent:#58c4a8; --ontime:#46b878; --late:#f0b04e; --absent:#e8695e; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#14201c; --card:#1c2b26; --ink:#eef2ee; --muted:#9db0a8; --line:#33453e;
+  --accent:#58c4a8; --ontime:#46b878; --late:#f0b04e; --absent:#e8695e; color-scheme:dark;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4}
+header{padding:18px 20px 0;max-width:1200px;margin:0 auto}
+h1{font-family:var(--display);font-weight:800;font-size:26px;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 14px}
+nav{display:flex;gap:6px;border-bottom:2px solid var(--line)}
+nav button{font:inherit;font-weight:700;background:none;border:0;padding:10px 18px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px}
+nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+main{max-width:1200px;margin:0 auto;padding:16px 20px 40px}
+.savebar{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:center;justify-content:flex-end;padding:8px 20px}
+.savebar span{font-weight:600;color:var(--muted)}
+.savebar.dirty span{color:var(--late)}
+#save{font:inherit;font-weight:800;padding:9px 28px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+#save:disabled{opacity:.55;cursor:default}
+.dl{font:inherit;font-weight:700;padding:8px 16px;border-radius:999px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer}
+.dl.small{padding:5px 12px;font-size:14px;margin-top:10px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.note{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--late);padding:8px 12px;border-radius:6px;margin-bottom:14px;font-size:14px;color:var(--muted)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.bar button{font:inherit;font-weight:700;padding:8px 16px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.mini{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;font-weight:600}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+h2.grp{font-family:var(--display);font-size:19px;margin:20px 0 8px}
+.tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:color-mix(in srgb,var(--line) 35%,var(--card))}
+td.no{width:40px;color:var(--muted);font-variant-numeric:tabular-nums}
+td.nm{font-weight:600}
+input[type=text],input[type=time]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%}
+input[type=time]{width:130px}
+.act button{font:inherit;font-weight:700;border-radius:6px;border:0;padding:7px 12px;cursor:pointer;background:var(--accent);color:#fff}
+.act button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);margin-left:4px}
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:700;color:#fff;white-space:nowrap}
+.chip.ontime{background:var(--ontime)}.chip.late{background:var(--late);color:#2a1d00}.chip.absent{background:var(--absent)}
+/* summary */
+.total{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-wrap:wrap;gap:28px;align-items:center;justify-content:center;margin-bottom:20px}
+.total svg{width:min(380px,80vw);height:auto}
+.legend{display:grid;gap:12px;min-width:230px}
+.legend .row{display:flex;align-items:baseline;gap:10px}
+.legend .pct{font-family:var(--display);font-weight:800;font-size:44px;font-variant-numeric:tabular-nums;min-width:130px}
+.legend .lab{font-size:20px;font-weight:600}.legend .cnt{color:var(--muted);font-size:15px}
+.legend h2{font-family:var(--display);margin:0 0 4px;font-size:26px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center}
+.card h3{font-family:var(--display);margin:0 0 6px;font-size:20px}
+.card svg{width:150px;height:150px}
+.card .nums{display:grid;gap:2px;font-size:15px;font-weight:600;margin-top:6px;text-align:left;padding:0 10px}
+.card .nums span.dot{margin-right:6px}
+.tot{font-size:13px;color:var(--muted);margin-top:4px}
+@media (max-width:480px){.legend .pct{font-size:36px;min-width:110px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Munavvirul Islam Madrasa Kuthuparamb</h1>
+  <p class="sub">Parents meeting attendance. On time means arrival at or before 9:00 AM.</p>
+  <nav role="tablist">
+    <button role="tab" id="tab-att" aria-selected="true">Attendance</button>
+    <button role="tab" id="tab-sum" aria-selected="false">Summary</button>
+  </nav>
+</header>
+<div class="savebar" id="savebar">
+  <span id="upd"></span><button id="refresh" type="button" class="dl small" style="margin:0">Refresh</button><span id="dirtymsg">All changes saved</span>
+  <button id="save" type="button">Save</button>
+</div>
+<main>
+  <div id="status"></div>
+  <section id="att"></section>
+  <section id="sum" hidden></section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const CUTOFF = 9*60; // 9:00 AM in minutes
+const CLASSES = [{"cls": "X", "Boys": ["MUHAMMED BISHR MK", "MUHAMMED RABEEH K", "MUHAMMED SHAMIL AK"], "Girls": ["HADIYA V", "FATHIMA RINSI KT", "NIDA FATHIMA MT", "FATHIMA RASHA CT", "SHIFA CT", "SHADIYA K"]}, {"cls": "IX", "Boys": ["MUHAMMED BISHR MK", "MUHAMMED IRSHAD AK", "MUHAMMED AMJID MT", "MUHAMMED ASHMIL CT", "MUHAMMED SHEFIL MT", "MUHAMMED ANSHID U", "FALIH MT"], "Girls": ["ZIYA FATHIMA CT", "FATHIMA JANNA KT", "ADHILA SHERIN CT", "MANNA FATHIMA MT", "AYISHA SIDHEEQA", "FINNA FATHIMA PK", "JISRIYYA CT", "MINHA FATHIMA CT", "FATHIMA RAJA KK", "RANA KK", "RISHA PP"]}, {"cls": "VIII", "Boys": ["MUHAMMED AZHAR M", "MUHAMMED AMEEN CT", "RAMIL CT", "MUHAMMED AFLAH U", "MUHAMMED SWALIH CT", "MUHAMMED SABEEH PT"], "Girls": ["MANHA K C", "LIBA MEHRIN CT", "ISHA MT", "SALIMA NASRIN CK", "LINA ASHI U", "FATHIMA FARHA M", "KENZA FATHIMA CT", "FATHIMA MINHA C", "FATHIMA NADHA K", "FATHIMA MINHA E"]}, {"cls": "VII", "Boys": ["MUHAMMED SHADHIN CT", "ISMATHULA KK", "MUHAIMIN MT", "MUHAMMED RABEEH M T", "AMJAD CT", "MUHAMMED RIYAN M", "MUHAMMED SINAN MT", "MUHAMMED SOBBEH CT", "MUHAMMED MUSADHIQUE MT", "MUHAMMED AFIN E", "MUHAMMED AFNAN E", "DHULKIFLI KK"], "Girls": ["DIYA NASRIN U", "FATHIMA RUSHDA VP", "FATHIMA LIYA P", "FATHIMA SALVA MT", "HAIFA CT", "KENZA MARIYAM P", "NASHWA CT", "SIYA FATHIMA MT", "MIDHA FATHIMA K", "MINHA CT", "SAFA THASNI MT", "SHAHMA FATHIMA MT", "AYISHA RUSHDA CT"]}, {"cls": "VI", "Boys": ["MUHAMMED AYDHIN K", "MUHAMMED NISHAN KK", "MUHAMMED AMEEN CT", "MUHAMMED SHADIN PK", "MUHAMMED AHJAR MK", "RASIN PK", "MUHAMMED RABEEH M", "MUHAMMED YASEEN M", "MUHAMMED NIHAL MT", "MUHAMMED SIYAN CT", "MUHAMMED RABEEH MT", "MUHAMMED NAFIH CT", "MUHAMMED FARIS CT", "MUHAMMED HAMDAN K", "MUHAMMED SHADIL P"], "Girls": ["NUBLA FATHIMA MT", "LIYA FATHIMA M", "FATHIMA NASHWA AK", "FATHIMA RIDHA CT", "AMEENA MEHRIN MT", "HINA FATHIMA MT", "LIYA SHAKIR MT", "FATHIMA LIYA CT", "FATHIMA NAJA CT", "RIFA FATHIMA CT", "THANHA PARVEEN PP", "NAJVA MT", "HANIYA CT", "AFREEN O", "HANIYA FATHIMA KK", "NIHALA FATHIMA MT"]}, {"cls": "V", "Boys": ["SAMIL SAJAD K", "MUHAMMED SIYAD MT", "MUHAMMED RASEEN PP", "MUHAMMED HANAN PP", "MUHAMMED FADHIL MT", "NAJIH MT", "MUHAMMED ANSHID CT", "MUHAMMED WAFA CT", "MAZIN HUSSAIN CT", "MUHAMMED FAIZAN AK", "SHAHID MT", "MUHAMMED AYAN V", "MUHAMMED RAJIH KT", "SHEZAN SATHAR MT", "MINHAJ K", "AMAN KV"], "Girls": ["NOOHA CT", "MAHNA K", "FATHIMA RAJA CT", "FATHIMA RAIHA AK", "SHABA FATHIMA MT", "FATHIMA SANVA M", "AYISHA NASHVA CT", "FATHIMA MAHWA M", "INSHA CT", "SHAMLIYA AK", "NUHA FATHIMA CT", "MINNA RAHMATH CT", "ISHA MEHRIN V", "FATHIMA FIDA MT", "SHADHA MARIYAM PK", "RANA PARVEEN MT", "MIHA FATHIMA U", "DHILNA AK", "NASIHA CT"]}, {"cls": "IV", "Boys": ["MOHAMMED SHAHIN U", "MUHAMMED RAFAN KT", "MUHAMMED RAYAN P", "MUHAMMED RAZEEN CT", "MUHAMMED NIYAS MT", "MUHAMMED HANAN MT", "SHAMVEEL RUFAID K", "HASANUL BANNA CT", "MUHAMMED ZAYAN P", "SHAYAN MUHAMMED P K"], "Girls": ["ANEESA FATHIMA M", "SAFA CT", "FATHIMA LABEEBA V", "FATHIMA RIDHA CT", "ANZA FATHIMA O", "NASHVA PK", "AISHA NOURIN E", "NUHA AMAN CT", "FARIDHA NAJA K"]}, {"cls": "III", "Boys": ["MUHAMMED SHAFAH MT", "MUHAMMED AYDIN CT", "MUHAMMED SHAHABIN PP", "BISHR MUHAMMED C", "MUHAMMED HADI AK", "MUHAMMED HADI E", "ADIL SHAHAN MT", "ADIL AMAN CT", "HISANH MUHAMMAD CT", "MUHAMMAD YAMIN CT", "RIHAN CT", "MUHAMMAD HAMDAN MT", "MUHAMMAD HISHAM TK", "MUHAMMAD FAYSAN M", "MUHAMMED SHAN CT", "MUHAMMAD MASDOOQ M"], "Girls": ["RINSHA SHERIN AK", "NAIVA NASAR AK", "RASA RASVI CT", "ISHAL FATHIMA CT", "HIBHA CT", "FATHIMMA KENZA CT", "FHATHIMA ZAHRA CT", "NAYA MEHARIN CT", "FATHIMMA SUHADA MT", "RISHA FATHIMA CT", "SAFA FATHIMA CT", "FATHIMA NOOHA CT", "RUVA MEHRIN P", "SAFA FATHIMA KV", "NILOOFAR C", "HAYFA SHENSA MT", "HADIYA GAFOOR P K"]}, {"cls": "II", "Boys": ["MUHAMMAD ASIM U", "MUHAMMAD RABEEH MT", "MUHAMMED SHAHIL AK", "MUHAMMED HASHIR M K", "FADI ZAYAN V P", "MUHAMMED RAYYAN K", "MUHAMMED ADIL K", "MUHAMMED SAIF PP", "MUHAMMED AJWAD CP", "MUHAMMED HANAN MT", "MUHAMMED AZEEM O", "MUHAMMED RAZIN K", "MUHAMMED AYAN AK", "RAZAL PK", "AYAN KV", "MIHAMMED RAIHAN PP", "MUHAMMED RAIHAN MT", "MUHAMMED AYAN MT", "HADI HAMDAN MT", "RAFAN MUHAMMED PK"], "Girls": ["FATHIMA RIFHATH KK", "HANIYA FATHIMA AK", "FATHIMA HIBA AM", "FATHIMA ZIYA AK", "SANHA FATHIMA M", "FATHIMA SILMIYA CT"]}, {"cls": "I", "Boys": ["MUHAMMED JASL C T", "MUHAMMED ZAYAN M T", "MUHAMMED ZAYAN M", "MUHAMMED AIMEN VP", "MUHAMMED HADI CT", "MUHAMMED SAHAL CT", "MUHAMMED SHAHAN MT", "MUHAMMED NABHAN K", "ALHAN MT", "MUHAMMED RAJEEB MT", "RIZWAN MUHAMMED CT", "MUHAMMED NIHAL KK", "AMAN MUHAMMED CT", "MUHAMMED BISHR C"], "Girls": ["FATHIMA SALVA AK", "DIYA FATHIMA MK", "KHADEEJA BATHOOL K", "FATHIMA RIFDA C", "ISHWA AYRIN MT", "HAYA FATHIMA K", "FATHIMA SHAHANOOR M", "IWA FATHIMA MT", "FATHIMA RIFHA M", "HALA FATHIMA E", "AYNA MEHWISH MK"]}];
+// state: id -> {parent, time}
+const state = new Map();
+const dirty = new Set();
+let saving = false;
+let current = CLASSES[0].cls;
+let tab = "att";
+let dbc = null; // db collection, null when unavailable
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function idOf(cls,g,i){return cls+"-"+g+"-"+(i+1);}
+function statusOf(id){
+  const r = state.get(id);
+  if(!r || !r.time) return "absent";
+  const [h,m] = r.time.split(":").map(Number);
+  return (h*60+m) <= CUTOFF ? "ontime" : "late";
+}
+function label(s){return s==="ontime"?"On time":s==="late"?"Late":"Not present";}
+function nowHHMM(){const d=new Date();return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");}
+function fmt(t){if(!t)return"";const [h,m]=t.split(":").map(Number);return ((h%12)||12)+":"+String(m).padStart(2,"0")+" "+(h<12?"AM":"PM");}
+
+function updateBar(){
+  const bar=$("#savebar"), n=dirty.size;
+  bar.classList.toggle("dirty",n>0);
+  $("#dirtymsg").textContent = saving ? "Saving..." : n>0 ? n+" unsaved change"+(n>1?"s":"") : (lastSaved ? "Saved at "+fmt(lastSaved) : "All changes saved");
+  $("#save").disabled = saving || n===0;
+}
+let lastSaved="";
+async function saveAll(){
+  if(saving||!dirty.size) return;
+  if(!dbc){ setStatus("Saving is not available here. Sign in to Claude and open the page again."); return; }
+  saving=true; updateBar();
+  const ids=[...dirty]; let failed=0;
+  for(const id of ids){
+    const r=state.get(id);
+    try{
+      const doc=dbc.doc(id);
+      if(!r||!r.time) await doc.delete(); else await doc.set({time:r.time});
+      dirty.delete(id);
+    }catch(e){ failed++; }
+  }
+  saving=false;
+  if(failed) setStatus(failed+" change"+(failed>1?"s":"")+" could not be saved. Press Save again. If it keeps failing, ask the page owner for edit access.");
+  else { setStatus(""); lastSaved=nowHHMM(); }
+  updateBar();
+}
+function setStatus(t){$("#status").innerHTML = t ? '<div class="note">'+esc(t)+'</div>' : "";}
+function setRec(id,patch){
+  state.set(id,Object.assign({time:""}, state.get(id)||{}, patch));
+  dirty.add(id); render();
+}
+
+function counts(list){
+  const c={ontime:0,late:0,absent:0};
+  list.forEach(id=>c[statusOf(id)]++);
+  return c;
+}
+function idsOf(c){const a=[];["Boys","Girls"].forEach(g=>c[g].forEach((n,i)=>a.push(idOf(c.cls,g[0],i))));return a;}
+
+function pie(c,size){
+  const t=c.ontime+c.late+c.absent, R=size/2-4, cx=size/2, cy=size/2;
+  const cols={ontime:"var(--ontime)",late:"var(--late)",absent:"var(--absent)"};
+  if(!t) return "";
+  let out='<svg viewBox="0 0 '+size+' '+size+'" role="img" aria-label="Pie chart: '+c.ontime+' on time, '+c.late+' late, '+c.absent+' not present">';
+  const parts=["ontime","late","absent"].filter(k=>c[k]>0);
+  if(parts.length===1){
+    out+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+cols[parts[0]]+'"/>';
+  } else {
+    let a0=-Math.PI/2;
+    parts.forEach(k=>{
+      const a1=a0+2*Math.PI*c[k]/t, large=(a1-a0)>Math.PI?1:0;
+      const x0=cx+R*Math.cos(a0),y0=cy+R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+      out+='<path d="M'+cx+','+cy+' L'+x0.toFixed(2)+','+y0.toFixed(2)+' A'+R+','+R+' 0 '+large+' 1 '+x1.toFixed(2)+','+y1.toFixed(2)+' Z" fill="'+cols[k]+'" stroke="var(--card)" stroke-width="2"/>';
+      a0=a1;
+    });
+  }
+  return out+'</svg>';
+}
+const pc=(n,t)=>t?Math.round(n*1000/t)/10:0;
+const pcs=(n,t)=>pc(n,t).toFixed(1).replace(/\.0$/,"")+"%";
+
+function renderAtt(){
+  const c = CLASSES.find(x=>x.cls===current);
+  const cn = counts(idsOf(c));
+  let h='<div class="bar" role="group" aria-label="Choose class">'+CLASSES.map(x=>'<button data-cls="'+x.cls+'" aria-pressed="'+(x.cls===current)+'">Class '+x.cls+'</button>').join("")+'</div>';
+  h+='<div class="actions"><button class="dl" data-dl="class" data-cls="'+c.cls+'">Download Class '+c.cls+' report</button></div>';
+  h+='<div class="mini"><span><i class="dot" style="background:var(--ontime)"></i>On time '+cn.ontime+'</span><span><i class="dot" style="background:var(--late)"></i>Late '+cn.late+'</span><span><i class="dot" style="background:var(--absent)"></i>Not present '+cn.absent+'</span></div>';
+  ["Boys","Girls"].forEach(g=>{
+    h+='<h2 class="grp">Class '+c.cls+' - '+g+'</h2><div class="tablewrap"><table><thead><tr><th>No.</th><th>Student</th><th>Arrival time</th><th>Status</th><th></th></tr></thead><tbody>';
+    c[g].forEach((n,i)=>{
+      const id=idOf(c.cls,g[0],i), r=state.get(id)||{time:""}, s=statusOf(id);
+      h+='<tr data-id="'+id+'"><td class="no">'+(i+1)+'</td><td class="nm">'+esc(n)+'</td>'+
+        '<td><input type="time" class="time" id="t-'+id+'" aria-label="Arrival time of '+esc(n)+'" value="'+(r.time||"")+'"></td>'+
+        '<td><span class="chip '+s+'">'+label(s)+'</span></td>'+
+        '<td class="act"><button class="now">Arrived now</button><button class="ghost clr">Clear</button></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  });
+  $("#att").innerHTML=h;
+}
+function renderSum(){
+  const all=[];CLASSES.forEach(c=>all.push(...idsOf(c)));
+  const T=counts(all), t=all.length;
+  let h='<div class="actions"><button class="dl" data-dl="overall">Download overall summary</button><button class="dl" data-dl="all">Download all students list</button></div><div class="total">'+pie(T,380)+'<div class="legend"><h2>All classes ('+t+' students)</h2><div class="cnt" style="font-size:18px;font-weight:700;margin-bottom:6px">Arrived so far: '+(T.ontime+T.late)+' of '+t+' parents</div>'+
+   [["ontime","On time"],["late","Late arrival"],["absent","Not present"]].map(([k,l])=>
+   '<div class="row"><span class="pct" style="color:var(--'+k+')">'+pcs(T[k],t)+'</span><span><span class="lab">'+l+'</span><br><span class="cnt">'+T[k]+' of '+t+' parents</span></span></div>').join("")+'</div></div>';
+  h+='<div class="grid">';
+  CLASSES.forEach(c=>{
+    const ids=idsOf(c), cn=counts(ids), n=ids.length;
+    h+='<div class="card"><h3>Class '+c.cls+'</h3>'+pie(cn,150)+'<div class="nums">'+
+     [["ontime","On time"],["late","Late"],["absent","Not present"]].map(([k,l])=>'<div><i class="dot" style="background:var(--'+k+')"></i>'+l+': '+pcs(cn[k],n)+' ('+cn[k]+')</div>').join("")+
+     '</div><div class="tot">'+n+' students</div><button class="dl small" data-dl="class" data-cls="'+c.cls+'">Download report</button></div>';
+  });
+  $("#sum").innerHTML=h+'</div>';
+}
+const SCHOOL="Munavvirul Islam Madrasa Kuthuparamb";
+const COL={ontime:[31,138,76],late:[224,149,43],absent:[200,71,61]};
+const LBL={ontime:"On time",late:"Late",absent:"Not present"};
+function stamp(){const d=new Date();return d.toLocaleDateString("en-GB")+" "+fmt(nowHHMM());}
+function pdfHeader(doc,title){
+  doc.setTextColor(20);doc.setFont("helvetica","bold");doc.setFontSize(17);
+  doc.text(SCHOOL.toUpperCase(),105,16,{align:"center"});
+  doc.setFontSize(13);doc.text(title,105,24,{align:"center"});
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(100);
+  doc.text("Generated "+stamp()+"   |   On time means arrival at or before 9:00 AM",105,30,{align:"center"});
+  doc.setTextColor(20);doc.setDrawColor(150);doc.line(10,33,200,33);
+  return 40;
+}
+function pdfPie(doc,cx,cy,r,cn){
+  const t=cn.ontime+cn.late+cn.absent; if(!t) return;
+  const parts=["ontime","late","absent"].filter(k=>cn[k]>0);
+  if(parts.length===1){doc.setFillColor(...COL[parts[0]]);doc.circle(cx,cy,r,"F");return;}
+  let a0=-Math.PI/2;
+  parts.forEach(k=>{
+    const a1=a0+2*Math.PI*cn[k]/t, steps=Math.max(4,Math.ceil((a1-a0)*20));
+    const pts=[[cx,cy]];
+    for(let i=0;i<=steps;i++){const a=a0+(a1-a0)*i/steps;pts.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}
+    const rel=[];for(let i=1;i<pts.length;i++)rel.push([pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]]);
+    doc.setFillColor(...COL[k]);doc.setDrawColor(255);doc.setLineWidth(0.5);
+    doc.lines(rel,pts[0][0],pts[0][1],[1,1],"FD",true);
+    a0=a1;
+  });
+}
+function pdfLegend(doc,x,y,cn,n,size){
+  size=size||11;
+  ["ontime","late","absent"].forEach((k,i)=>{
+    doc.setFillColor(...COL[k]);doc.rect(x,y+i*9-3.5,4.5,4.5,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(size);doc.setTextColor(20);
+    doc.text(LBL[k]+": "+pcs(cn[k],n),x+7,y+i*9);
+    doc.setFont("helvetica","normal");doc.setFontSize(size-2);doc.setTextColor(100);
+    doc.text(cn[k]+" of "+n+" parents",x+7,y+i*9+4);
+  });
+  doc.setTextColor(20);
+}
+function pdfTable(doc,y,cols,rows,title,colorCol){
+  // cols: [{t,w,align}], rows: arrays of strings
+  const x0=10, rh=6.2;
+  const head=()=>{
+    doc.setFillColor(225,230,226);doc.rect(x0,y,190,rh,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(20);
+    let x=x0;cols.forEach(c=>{doc.text(c.t,x+1.5,y+4.3);x+=c.w;});y+=rh;
+  };
+  if(y+rh*3>285){doc.addPage();y=15;}
+  if(title){doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(20);doc.text(title,x0,y+4);y+=7;}
+  head();
+  rows.forEach(r=>{
+    if(y+rh>287){doc.addPage();y=15;head();}
+    doc.setDrawColor(190);doc.setLineWidth(0.2);doc.rect(x0,y,190,rh);
+    let x=x0;
+    cols.forEach((c,i)=>{
+      if(x>x0)doc.line(x,y,x,y+rh);
+      doc.setFont("helvetica",i===colorCol?"bold":"normal");doc.setFontSize(9);
+      const v=String(r[i]);
+      if(i===colorCol){const k=v==="On time"?"ontime":v==="Late"?"late":v==="Not present"?"absent":null;doc.setTextColor(...(k?COL[k]:[20,20,20]));}
+      else doc.setTextColor(20);
+      doc.text(v,x+1.5,y+4.3);x+=c.w;
+    });
+    y+=rh;
+  });
+  doc.setTextColor(20);
+  return y+4;
+}
+function studentRows(c,g){return c[g].map((nm,i)=>{const id=idOf(c.cls,g[0],i),r=state.get(id);return [String(i+1),nm,r&&r.time?fmt(r.time):"-",label(statusOf(id))];});}
+const SCOLS=[{t:"No.",w:14},{t:"Student",w:86},{t:"Arrival time",w:45},{t:"Status",w:45}];
+function buildClass(J,c){
+  const doc=new J({unit:"mm",format:"a4"}), ids=idsOf(c), cn=counts(ids), n=ids.length;
+  let y=pdfHeader(doc,"Class "+c.cls+" - Parents Meeting Attendance");
+  pdfPie(doc,40,y+18,16,cn); pdfLegend(doc,70,y+8,cn,n);
+  doc.setFont("helvetica","normal");doc.setFontSize(10);doc.text(n+" students",150,y+10);
+  y+=42;
+  ["Boys","Girls"].forEach(g=>{y=pdfTable(doc,y,SCOLS,studentRows(c,g),"Class "+c.cls+" - "+g,3);});
+  return doc;
+}
+function buildOverall(J){
+  const doc=new J({unit:"mm",format:"a4"}), all=[];CLASSES.forEach(c=>all.push(...idsOf(c)));
+  const T=counts(all), t=all.length;
+  let y=pdfHeader(doc,"All Classes - Attendance Summary");
+  pdfPie(doc,50,y+34,30,T); pdfLegend(doc,100,y+16,T,t,13);
+  doc.setFont("helvetica","normal");doc.setFontSize(11);doc.text(t+" students in total",100,y+50);
+  y+=74;
+  const cols=[{t:"Class",w:22},{t:"Students",w:24},{t:"On time",w:36},{t:"Late",w:36},{t:"Not present",w:36},{t:"Present total",w:36}];
+  const cell=(n,k,tot)=>n+"  ("+pcs(n,tot)+")";
+  const rows=CLASSES.map(c=>{const cn=counts(idsOf(c)),n=idsOf(c).length;return [c.cls,String(n),cell(cn.ontime,0,n),cell(cn.late,0,n),cell(cn.absent,0,n),cell(cn.ontime+cn.late,0,n)];});
+  rows.push(["All",String(t),cell(T.ontime,0,t),cell(T.late,0,t),cell(T.absent,0,t),cell(T.ontime+T.late,0,t)]);
+  pdfTable(doc,y,cols,rows,"Class-wise summary");
+  return doc;
+}
+function buildAll(J){
+  const doc=new J({unit:"mm",format:"a4"});
+  let y=pdfHeader(doc,"All Students - Parents Meeting Attendance");
+  CLASSES.forEach(c=>["Boys","Girls"].forEach(g=>{y=pdfTable(doc,y,SCOLS,studentRows(c,g),"Class "+c.cls+" - "+g,3);}));
+  return doc;
+}
+async function download(kind,cls){
+  const J=window.jspdf&&window.jspdf.jsPDF;
+  if(!J){setStatus("The PDF tool did not load. Check your internet connection and reload the page.");return;}
+  let doc,name;
+  try{
+    if(kind==="class"){doc=buildClass(J,CLASSES.find(x=>x.cls===cls));name="Class "+cls+" attendance report.pdf";}
+    else if(kind==="overall"){doc=buildOverall(J);name="Overall attendance summary.pdf";}
+    else {doc=buildAll(J);name="All students attendance.pdf";}
+  }catch(e){setStatus("Could not build the PDF.");return;}
+  let dl=null;
+  try{dl=await claude.use("downloads");}catch(e){}
+  if(!dl){setStatus("Downloads are not available in this view. Open the page from claude.ai.");return;}
+  try{await dl.save({filename:name,data:doc.output("arraybuffer")});}
+  catch(e){ if(!e||e.code!=="declined") setStatus("Could not download the file. Try again."); }
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button[data-dl]"); if(!b) return;
+  if(dirty.size) setStatus("You have unsaved changes. The report includes them, but press Save to keep them.");
+  download(b.dataset.dl,b.dataset.cls);
+});
+function render(){
+  updateBar();
+  // keep focus stable: only rebuild the visible tab
+  if(tab==="att"){
+    const a=document.activeElement, keep=a&&a.id;
+    renderAtt();
+    if(keep){const e=document.getElementById(keep); if(e) e.focus();}
+  } else renderSum();
+}
+function showTab(t){
+  tab=t;
+  $("#att").hidden=t!=="att"; $("#sum").hidden=t!=="sum";
+  $("#tab-att").setAttribute("aria-selected",t==="att"); $("#tab-sum").setAttribute("aria-selected",t==="sum");
+  render();
+}
+$("#save").onclick=saveAll;
+$("#tab-att").onclick=()=>showTab("att");
+$("#tab-sum").onclick=()=>showTab("sum");
+$("#att").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.cls){current=b.dataset.cls;render();return;}
+  const tr=b.closest("tr"); if(!tr) return; const id=tr.dataset.id;
+  if(b.classList.contains("now")) setRec(id,{time:nowHHMM()});
+  if(b.classList.contains("clr")) { state.delete(id); dirty.add(id); render(); }
+});
+$("#att").addEventListener("change",e=>{
+  const tr=e.target.closest("tr"); if(!tr) return; const id=tr.dataset.id;
+  if(e.target.classList.contains("time")) setRec(id,{time:e.target.value});
+});
+
+render();
+(async()=>{
+  try{
+    const db = await claude.use("db");
+    if(!db){ setStatus("Sign in to Claude to save attendance. Marks made now cannot be saved."); return; }
+    dbc = db.collection("attendance");
+    const timer=setTimeout(()=>setStatus("Loading is slow. Marks made now may not be saved."),10000);
+    let lastSig="";
+    const apply=snap=>{
+      clearTimeout(timer);
+      const seen=new Set();
+      snap.docs.forEach(d=>{
+        seen.add(d.id);
+        if(!dirty.has(d.id)) state.set(d.id,d.data());
+      });
+      [...state.keys()].forEach(k=>{ if(!seen.has(k)&&!dirty.has(k)) state.delete(k); });
+      const sig=[...state.entries()].map(([k,v])=>k+"="+(v&&v.time||"")).sort().join("|");
+      $("#upd").textContent="Updated "+new Date().toLocaleTimeString("en-GB");
+      if(sig!==lastSig){ lastSig=sig; render(); }
+    };
+    const pull=async()=>{
+      if(saving) return;
+      try{ apply(await dbc.get()); }catch(e){ $("#upd").textContent="Could not refresh at "+new Date().toLocaleTimeString("en-GB"); }
+    };
+    $("#refresh").onclick=pull;
+    dbc.onSnapshot(snap=>{ setStatus(""); apply(snap); },
+      err=>{clearTimeout(timer);setStatus("Live updates stopped. The page now refreshes every few seconds.");});
+    // fallback: poll so the hall display stays current even if live updates stall
+    setInterval(pull,5000);
+    pull();
+  }catch(e){ setStatus("Saving is not available here. Marks made now cannot be saved."); }
+})();
+</script>
+</body>
+</html>
